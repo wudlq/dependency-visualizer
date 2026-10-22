@@ -1,0 +1,6 @@
+parameter,value
+package_name,requests
+repository,https://pypi.org/pypi
+test_repo_mode,false
+ascii_tree,false
+color,red

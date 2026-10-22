@@ -1,0 +1,5 @@
+parameter,value
+package_name,-bad-
+repository,ftp://example.com
+test_repo_mode,false
+ascii_tree,yes please

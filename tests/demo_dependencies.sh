@@ -1,5 +1,5 @@
 #!/bin/sh
-# Демонстрация получения прямых зависимостей пакетов из PyPI.
+# Демонстрация графа зависимостей реальных пакетов из PyPI.
 cd "$(dirname "$0")/.."
 
 for config in config.csv tests/configs/valid_url.csv \

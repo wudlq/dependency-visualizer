@@ -6,7 +6,8 @@ import unittest
 from unittest import mock
 from urllib.error import HTTPError, URLError
 
-from repository import RepositoryError, fetch_package, package_url
+from repository import (RepositoryError, fetch_package, package_url,
+                        pypi_dependencies)
 
 REPOSITORY = "https://pypi.org/pypi"
 
@@ -75,6 +76,22 @@ class FetchPackageTest(unittest.TestCase):
         with self.assertRaisesRegex(RepositoryError, "requires_dist"):
             fetch_package(REPOSITORY, "requests",
                           answer({"info": {"requires_dist": "idna"}}))
+
+
+class PypiDependenciesTest(unittest.TestCase):
+    """Проверка функции получения зависимостей для графа."""
+
+    def test_names(self):
+        """Имена нормализуются, повторы и extra убираются."""
+        info = {"name": "pandas", "version": "3.0", "requires_dist": [
+            'numpy>=2.0; python_version < "3.14"',
+            'numpy>=2.3; python_version >= "3.14"',
+            "python_dateutil>=2.9",
+            'pytest; extra == "test"']}
+        get_dependencies = pypi_dependencies(REPOSITORY,
+                                             answer({"info": info}))
+        self.assertEqual(get_dependencies("pandas"),
+                         ["numpy", "python-dateutil"])
 
 
 if __name__ == "__main__":

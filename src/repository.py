@@ -12,6 +12,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import urlopen
 
+from requirements import direct_dependencies, normalize_name
+
 TIMEOUT_SECONDS = 20
 HTTP_NOT_FOUND = 404
 
@@ -70,3 +72,22 @@ def fetch_package(repository, package, opener=urlopen):
     """Получает сведения о пакете package из репозитория repository."""
     url = package_url(repository, package)
     return parse_package(download_json(url, package, opener))
+
+
+def pypi_dependencies(repository, opener=urlopen):
+    """Функция «пакет -> прямые зависимости» для репозитория PyPI.
+
+    Берутся обязательные зависимости (без extra). Имена приводятся
+    к единому виду, повторы (одна зависимость с разными маркерами
+    окружения) убираются.
+    """
+    def get_dependencies(name):
+        """Прямые зависимости пакета name из репозитория."""
+        package = fetch_package(repository, name, opener)
+        names = []
+        for requirement in direct_dependencies(package.requires_dist)[0]:
+            dep = normalize_name(requirement.name)
+            if dep not in names:
+                names.append(dep)
+        return names
+    return get_dependencies

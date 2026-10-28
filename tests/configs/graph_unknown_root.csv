@@ -1,0 +1,5 @@
+parameter,value
+package_name,Z
+repository,../repos/simple.txt
+test_repo_mode,true
+ascii_tree,false

@@ -4,8 +4,10 @@ import argparse
 import sys
 
 from config import ConfigError, load_config
-from repository import RepositoryError, fetch_package
-from requirements import direct_dependencies
+from file_repository import file_dependencies, load_repository
+from graph import build_graph
+from repository import RepositoryError, pypi_dependencies
+from requirements import normalize_name
 
 DEFAULT_CONFIG = "config.csv"
 EXIT_ERROR = 1
@@ -29,38 +31,52 @@ def print_error(title, messages):
         print("  - " + message, file=sys.stderr)
 
 
-def print_dependencies(package, dependencies, bad):
-    """Выводит прямые зависимости пакета."""
-    print("Пакет: {} {}".format(package.name, package.version))
-    if not dependencies:
-        print("Прямых зависимостей нет")
+def dependency_source(config):
+    """Имя корневого пакета и функция получения зависимостей.
+
+    В режиме тестового репозитория зависимости берутся из файла,
+    иначе — из репозитория пакетов по URL.
+    """
+    if config.test_repo_mode:
+        packages = load_repository(config.repository)
+        return config.package_name, file_dependencies(packages)
+    root = normalize_name(config.package_name)
+    return root, pypi_dependencies(config.repository)
+
+
+def print_graph(graph):
+    """Выводит граф зависимостей, найденные циклы и ошибки."""
+    print("Граф зависимостей пакета {}".format(graph.root))
+    print("Пакетов в графе: {}".format(len(graph.edges)))
+    for name, deps in graph.edges.items():
+        print("  {} -> {}".format(name, ", ".join(deps) or "(нет)"))
+    if graph.cycles:
+        print("Циклические зависимости:")
+        for cycle in graph.cycles:
+            print("  " + " -> ".join(cycle))
     else:
-        print("Прямые зависимости ({}):".format(len(dependencies)))
-        for requirement in dependencies:
-            print("  " + str(requirement))
-    if bad:
-        print_error("Не удалось разобрать строки зависимостей:", bad)
+        print("Циклических зависимостей нет")
+    if graph.errors:
+        print_error("Не удалось получить зависимости пакетов:",
+                    ["{}: {}".format(name, reason)
+                     for name, reason in graph.errors.items()])
 
 
 def main(argv=None):
-    """Загружает конфигурацию и выводит прямые зависимости пакета."""
+    """Загружает конфигурацию, строит и выводит граф зависимостей."""
     args = parse_args(argv)
     try:
         config = load_config(args.config)
     except ConfigError as err:
         print_error("Ошибка конфигурации (" + args.config + "):", err.errors)
         return EXIT_ERROR
-    if config.test_repo_mode:
-        print_error("Ошибка:", ["режим тестового репозитория "
-                                "пока не поддерживается"])
-        return EXIT_ERROR
     try:
-        package = fetch_package(config.repository, config.package_name)
+        root, get_dependencies = dependency_source(config)
+        graph = build_graph(root, get_dependencies, RepositoryError)
     except RepositoryError as err:
         print_error("Ошибка репозитория:", [str(err)])
         return EXIT_ERROR
-    dependencies, bad = direct_dependencies(package.requires_dist)
-    print_dependencies(package, dependencies, bad)
+    print_graph(graph)
     return 0
 
 

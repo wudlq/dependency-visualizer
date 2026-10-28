@@ -1,0 +1,5 @@
+parameter,value
+package_name,A
+repository,../repos/chain.txt
+test_repo_mode,true
+ascii_tree,false

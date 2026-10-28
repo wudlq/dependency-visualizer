@@ -11,12 +11,27 @@ from repository import PackageInfo, RepositoryError
 
 CONFIGS = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                        "configs")
+PYPI = {
+    "flask": ["blinker>=1.9.0", "jinja2>=3.1.2",
+              'asgiref>=3.2; extra == "async"'],
+    "blinker": [],
+    "jinja2": ["MarkupSafe>=2.0"],
+    "markupsafe": [],
+}
 
 
-def run_main(config, fetch=None):
+def fake_fetch(*args):
+    """Поддельный fetch_package(repository, name, opener) из словаря PYPI."""
+    name = args[1]
+    if name not in PYPI:
+        raise RepositoryError("пакет «{}» не найден".format(name))
+    return PackageInfo(name, "1.0", PYPI[name])
+
+
+def run_main(config):
     """Запускает main с конфигурацией config, возвращает код и вывод."""
     out, err = io.StringIO(), io.StringIO()
-    patch = mock.patch("main.fetch_package", fetch or mock.Mock())
+    patch = mock.patch("repository.fetch_package", fake_fetch)
     with patch, contextlib.redirect_stdout(out), \
             contextlib.redirect_stderr(err):
         code = main.main([os.path.join(CONFIGS, config)])
@@ -24,47 +39,57 @@ def run_main(config, fetch=None):
 
 
 class MainTest(unittest.TestCase):
-    """Проверка вывода прямых зависимостей и обработки ошибок."""
+    """Проверка вывода графа зависимостей и обработки ошибок."""
 
-    def test_dependencies(self):
-        """Выводятся только обязательные прямые зависимости."""
-        package = PackageInfo("Flask", "3.1.3", [
-            "blinker>=1.9.0", 'asgiref>=3.2; extra == "async"'])
-        code, out, _ = run_main("valid_url.csv",
-                                mock.Mock(return_value=package))
+    def test_pypi_graph(self):
+        """Граф строится транзитивно, extra-зависимости не входят."""
+        code, out, _ = run_main("valid_url.csv")
         self.assertEqual(code, 0)
-        self.assertIn("Пакет: Flask 3.1.3", out)
-        self.assertIn("Прямые зависимости (1):", out)
-        self.assertIn("blinker >=1.9.0", out)
+        self.assertIn("Пакетов в графе: 4", out)
+        self.assertIn("flask -> blinker, jinja2", out)
+        self.assertIn("jinja2 -> markupsafe", out)
         self.assertNotIn("asgiref", out)
 
-    def test_no_dependencies(self):
-        """Пакет без зависимостей."""
-        package = PackageInfo("six", "1.17.0", [])
-        _, out, _ = run_main("pypi_six.csv",
-                             mock.Mock(return_value=package))
-        self.assertIn("Прямых зависимостей нет", out)
-
     def test_repository_error(self):
-        """Ошибка репозитория выводится, код завершения 1."""
-        fetch = mock.Mock(side_effect=RepositoryError("пакет не найден"))
-        code, _, err = run_main("pypi_not_found.csv", fetch)
+        """Корневого пакета нет в репозитории: ошибка и код 1."""
+        code, _, err = run_main("pypi_not_found.csv")
         self.assertEqual(code, main.EXIT_ERROR)
-        self.assertIn("пакет не найден", err)
+        self.assertIn("не найден", err)
 
     def test_config_error(self):
-        """Ошибка конфигурации: в репозиторий не обращаемся."""
-        fetch = mock.Mock()
-        code, _, err = run_main("bad_url.csv", fetch)
+        """Ошибка конфигурации."""
+        code, _, err = run_main("bad_url.csv")
         self.assertEqual(code, main.EXIT_ERROR)
         self.assertIn("Ошибка конфигурации", err)
-        fetch.assert_not_called()
 
-    def test_test_repo_mode(self):
-        """Режим тестового репозитория пока не поддерживается."""
-        code, _, err = run_main("valid_test_repo.csv")
-        self.assertEqual(code, main.EXIT_ERROR)
-        self.assertIn("тестового репозитория", err)
+    def test_test_repo(self):
+        """Граф из тестового репозитория."""
+        code, out, _ = run_main("graph_simple.csv")
+        self.assertEqual(code, 0)
+        self.assertIn("A -> B, C", out)
+        self.assertIn("D -> (нет)", out)
+        self.assertIn("Циклических зависимостей нет", out)
+
+    def test_test_repo_cycle(self):
+        """Цикл выводится отдельно, программа завершается без ошибки."""
+        code, out, _ = run_main("graph_cycle.csv")
+        self.assertEqual(code, 0)
+        self.assertIn("A -> B -> C -> A", out)
+
+    def test_test_repo_missing_package(self):
+        """Неизвестная зависимость: граф строится, ошибка выводится."""
+        code, out, err = run_main("graph_missing.csv")
+        self.assertEqual(code, 0)
+        self.assertIn("A -> B, X", out)
+        self.assertIn("X: пакет X не найден", err)
+
+    def test_test_repo_errors(self):
+        """Ошибки в файле тестового репозитория и неизвестный корень."""
+        for config in ("graph_bad_format.csv", "graph_bad_name.csv",
+                       "graph_duplicate.csv", "graph_unknown_root.csv"):
+            code, _, err = run_main(config)
+            self.assertEqual(code, main.EXIT_ERROR, config)
+            self.assertIn("Ошибка репозитория", err)
 
 
 if __name__ == "__main__":

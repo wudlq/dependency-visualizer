@@ -6,6 +6,7 @@ import sys
 from config import ConfigError, load_config
 from file_repository import file_dependencies, load_repository
 from graph import build_graph
+from load_order import broken_dependencies, load_order
 from repository import RepositoryError, pypi_dependencies
 from requirements import normalize_name
 
@@ -21,6 +22,9 @@ def parse_args(argv=None):
         "config", nargs="?", default=DEFAULT_CONFIG,
         help="путь к конфигурационному файлу CSV "
              "(по умолчанию " + DEFAULT_CONFIG + ")")
+    parser.add_argument(
+        "--order", action="store_true",
+        help="режим вывода порядка загрузки зависимостей")
     return parser.parse_args(argv)
 
 
@@ -44,18 +48,42 @@ def dependency_source(config):
     return root, pypi_dependencies(config.repository)
 
 
-def print_graph(graph):
-    """Выводит граф зависимостей, найденные циклы и ошибки."""
-    print("Граф зависимостей пакета {}".format(graph.root))
-    print("Пакетов в графе: {}".format(len(graph.edges)))
-    for name, deps in graph.edges.items():
-        print("  {} -> {}".format(name, ", ".join(deps) or "(нет)"))
+def print_cycles(graph):
+    """Выводит найденные циклические зависимости."""
     if graph.cycles:
         print("Циклические зависимости:")
         for cycle in graph.cycles:
             print("  " + " -> ".join(cycle))
     else:
         print("Циклических зависимостей нет")
+
+
+def print_graph(graph):
+    """Выводит граф зависимостей и найденные циклы."""
+    print("Граф зависимостей пакета {}".format(graph.root))
+    print("Пакетов в графе: {}".format(len(graph.edges)))
+    for name, deps in graph.edges.items():
+        print("  {} -> {}".format(name, ", ".join(deps) or "(нет)"))
+    print_cycles(graph)
+
+
+def print_load_order(graph):
+    """Выводит порядок загрузки зависимостей пакета."""
+    order = load_order(graph)
+    print("Порядок загрузки зависимостей пакета {}:".format(graph.root))
+    for number, name in enumerate(order, start=1):
+        print("  {}. {}".format(number, name))
+    print_cycles(graph)
+    broken = broken_dependencies(graph, order)
+    if broken:
+        print("Из-за циклов строгий порядок невозможен, "
+              "раньше своей зависимости загружаются:")
+        for name, dep in broken:
+            print("  {} (зависит от {})".format(name, dep))
+
+
+def print_errors(graph):
+    """Выводит пакеты, зависимости которых получить не удалось."""
     if graph.errors:
         print_error("Не удалось получить зависимости пакетов:",
                     ["{}: {}".format(name, reason)
@@ -76,7 +104,11 @@ def main(argv=None):
     except RepositoryError as err:
         print_error("Ошибка репозитория:", [str(err)])
         return EXIT_ERROR
-    print_graph(graph)
+    if args.order:
+        print_load_order(graph)
+    else:
+        print_graph(graph)
+    print_errors(graph)
     return 0
 
 

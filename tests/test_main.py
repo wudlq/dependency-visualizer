@@ -28,13 +28,13 @@ def fake_fetch(*args):
     return PackageInfo(name, "1.0", PYPI[name])
 
 
-def run_main(config):
+def run_main(config, *options):
     """Запускает main с конфигурацией config, возвращает код и вывод."""
     out, err = io.StringIO(), io.StringIO()
     patch = mock.patch("repository.fetch_package", fake_fetch)
     with patch, contextlib.redirect_stdout(out), \
             contextlib.redirect_stderr(err):
-        code = main.main([os.path.join(CONFIGS, config)])
+        code = main.main([*options, os.path.join(CONFIGS, config)])
     return code, out.getvalue(), err.getvalue()
 
 
@@ -90,6 +90,27 @@ class MainTest(unittest.TestCase):
             code, _, err = run_main(config)
             self.assertEqual(code, main.EXIT_ERROR, config)
             self.assertIn("Ошибка репозитория", err)
+
+    def test_load_order(self):
+        """Режим --order: зависимости раньше пакета, корень последний."""
+        code, out, _ = run_main("graph_simple.csv", "--order")
+        self.assertEqual(code, 0)
+        self.assertIn("Порядок загрузки", out)
+        lines = [line.strip() for line in out.splitlines()]
+        self.assertEqual(lines[1:5], ["1. D", "2. B", "3. C", "4. A"])
+
+    def test_load_order_cycle(self):
+        """Режим --order с циклом: нарушенная зависимость выводится."""
+        _, out, _ = run_main("graph_cycle.csv", "--order")
+        self.assertIn("строгий порядок невозможен", out)
+        self.assertIn("C (зависит от A)", out)
+
+    def test_load_order_pypi(self):
+        """Режим --order для пакета из репозитория."""
+        _, out, _ = run_main("valid_url.csv", "--order")
+        order = [line.split(". ")[1] for line in out.splitlines()
+                 if ". " in line]
+        self.assertEqual(order, ["blinker", "markupsafe", "jinja2", "flask"])
 
 
 if __name__ == "__main__":

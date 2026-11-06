@@ -88,10 +88,12 @@ class PypiDependenciesTest(unittest.TestCase):
             'numpy>=2.3; python_version >= "3.14"',
             "python_dateutil>=2.9",
             'pytest; extra == "test"']}
-        get_dependencies = pypi_dependencies(REPOSITORY,
+        versions = {}
+        get_dependencies = pypi_dependencies(REPOSITORY, versions,
                                              answer({"info": info}))
         self.assertEqual(get_dependencies("pandas"),
                          ["numpy", "python-dateutil"])
+        self.assertEqual(versions, {"pandas": "3.0"})
 
 
 if __name__ == "__main__":

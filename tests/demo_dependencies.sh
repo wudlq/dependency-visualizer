@@ -7,7 +7,7 @@ for config in config.csv tests/configs/valid_url.csv \
               tests/configs/pypi_not_found.csv \
               tests/configs/pypi_unreachable.csv; do
     echo "=== $config ==="
-    ./run.sh "$config"
+    ./run.sh --no-show "$config"
     echo "(код завершения: $?)"
     echo
 done

@@ -15,13 +15,28 @@ class FileRepositoryTest(unittest.TestCase):
 
     def test_parse(self):
         """Обычный файл с пустыми строками и пакетом без зависимостей."""
-        packages = parse_repository("A: B C\n\nB: C\nC:\n")
+        packages, versions = parse_repository("A: B C\n\nB: C\nC:\n")
         self.assertEqual(packages, {"A": ["B", "C"], "B": ["C"], "C": []})
+        self.assertEqual(versions, {})
+
+    def test_versions(self):
+        """Версия после имени пакета необязательна."""
+        packages, versions = parse_repository("A 2.1.0: B\nB 1.4:\nC: B\n")
+        self.assertEqual(packages, {"A": ["B"], "B": [], "C": ["B"]})
+        self.assertEqual(versions, {"A": "2.1.0", "B": "1.4"})
+
+    def test_bad_version(self):
+        """Версия только из чисел через точку, не больше одной."""
+        for text in ("A 1.x: B", "A 1.0 2.0:", "A v1:", "A 1.:"):
+            with self.assertRaises(RepositoryError, msg=text):
+                parse_repository(text)
 
     def test_load_file(self):
         """Файлы из tests/repos читаются."""
-        packages = load_repository(os.path.join(REPOS, "complex.txt"))
+        packages, versions = load_repository(
+            os.path.join(REPOS, "complex.txt"))
         self.assertEqual(packages["A"], ["B", "C", "D"])
+        self.assertEqual(versions["A"], "5.0")
 
     def test_bad_format(self):
         """Строка без двоеточия."""
@@ -30,7 +45,7 @@ class FileRepositoryTest(unittest.TestCase):
 
     def test_bad_name(self):
         """Имена только из больших латинских букв."""
-        for text in ("a: B", "A: b", "A1:", "A: B-C", "Б:"):
+        for text in ("a: B", "A: b", "A1:", "A: B-C", "Б:", ": B"):
             with self.assertRaises(RepositoryError, msg=text):
                 parse_repository(text)
 

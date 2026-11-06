@@ -8,7 +8,7 @@ for config in tests/configs/valid_*.csv tests/configs/nope.csv \
               tests/configs/duplicate_param.csv \
               tests/configs/empty_*.csv tests/configs/many_errors.csv; do
     echo "=== $config ==="
-    ./run.sh "$config"
+    ./run.sh --no-show "$config"
     echo "(код завершения: $?)"
     echo
 done

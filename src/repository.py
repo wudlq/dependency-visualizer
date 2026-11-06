@@ -74,16 +74,19 @@ def fetch_package(repository, package, opener=urlopen):
     return parse_package(download_json(url, package, opener))
 
 
-def pypi_dependencies(repository, opener=urlopen):
+def pypi_dependencies(repository, versions=None, opener=urlopen):
     """Функция «пакет -> прямые зависимости» для репозитория PyPI.
 
-    Берутся обязательные зависимости (без extra). Имена приводятся
-    к единому виду, повторы (одна зависимость с разными маркерами
-    окружения) убираются.
+    Берутся обязательные зависимости (без extra) последней версии
+    пакета. Имена приводятся к единому виду, повторы (одна зависимость
+    с разными маркерами окружения) убираются. Если передан словарь
+    versions, в него записывается актуальная версия каждого пакета.
     """
     def get_dependencies(name):
         """Прямые зависимости пакета name из репозитория."""
         package = fetch_package(repository, name, opener)
+        if versions is not None:
+            versions[name] = package.version
         names = []
         for requirement in direct_dependencies(package.requires_dist)[0]:
             dep = normalize_name(requirement.name)

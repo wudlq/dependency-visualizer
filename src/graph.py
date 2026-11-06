@@ -19,13 +19,19 @@ class DependencyGraph:
     edges — словарь «пакет -> список прямых зависимостей» в порядке
     обхода; cycles — найденные циклы (списки пакетов, первый пакет
     повторяется в конце); errors — пакеты, для которых не удалось
-    получить зависимости, и причина.
+    получить зависимости, и причина; versions — версии пакетов.
     """
 
     root: str
     edges: dict = field(default_factory=dict)
     cycles: list = field(default_factory=list)
     errors: dict = field(default_factory=dict)
+    versions: dict = field(default_factory=dict)
+
+    def label(self, name):
+        """Подпись пакета: имя и версия, если она известна."""
+        version = self.versions.get(name)
+        return "{} {}".format(name, version) if version else name
 
 
 def load_dependencies(graph, name, get_dependencies, error_type):

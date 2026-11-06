@@ -86,6 +86,13 @@ class BuildGraphTest(unittest.TestCase):
         graph = build_graph(0, lookup(packages))
         self.assertEqual(len(graph.edges), size + 1)
 
+    def test_label(self):
+        """Подпись пакета: имя и версия, если она известна."""
+        graph = build_graph("A", lookup({"A": ["B"], "B": []}))
+        graph.versions = {"A": "1.0"}
+        self.assertEqual(graph.label("A"), "A 1.0")
+        self.assertEqual(graph.label("B"), "B")
+
 
 if __name__ == "__main__":
     unittest.main()
